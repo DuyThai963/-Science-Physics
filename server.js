@@ -12,6 +12,14 @@ const PORT = process.env.PORT || 5001;
 app.use(cors());
 app.use(express.json());
 
+// Normalize path for Vercel Serverless Function rewrites
+app.use((req, res, next) => {
+  if (!req.url.startsWith('/api') && req.url !== '/' && !req.url.startsWith('/assets')) {
+    req.url = '/api' + req.url;
+  }
+  next();
+});
+
 // Simple In-Memory Cache
 const cache = new Map();
 const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
@@ -613,18 +621,19 @@ app.get('/api/movies/detail', async (req, res) => {
   }
 });
 
-// Serve frontend in production
-const distPath = path.join(__dirname, 'dist');
-app.use(express.static(distPath));
+// Serve frontend in production (for standalone / local server)
+if (!process.env.VERCEL) {
+  const distPath = path.join(__dirname, 'dist');
+  app.use(express.static(distPath));
 
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api')) {
-    return res.status(404).json({ error: 'Endpoint not found' });
-  }
-  const indexPath = path.join(distPath, 'index.html');
-  res.sendFile(indexPath, (err) => {
-    if (err) {
-      res.send(`<!DOCTYPE html>
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api')) {
+      return res.status(404).json({ error: 'Endpoint not found' });
+    }
+    const indexPath = path.join(distPath, 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        res.send(`<!DOCTYPE html>
 <html>
 <head><title>Science - Physics Server Active</title></head>
 <body style="background:#09090b;color:#fff;font-family:sans-serif;padding:40px;text-align:center;">
@@ -632,10 +641,13 @@ app.get('*', (req, res) => {
   <p style="color:#a1a1aa">Run "npm run dev" to start Vite frontend dev server with live hot reload, or run "npm run build" to generate production dist.</p>
 </body>
 </html>`);
-    }
+      }
+    });
   });
-});
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Science - Physics Server] Running at http://127.0.0.1:${PORT}`);
-});
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Science - Physics Server] Running at http://127.0.0.1:${PORT}`);
+  });
+}
+
+export default app;
